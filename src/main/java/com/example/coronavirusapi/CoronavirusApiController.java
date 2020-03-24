@@ -1,11 +1,9 @@
 package com.example.coronavirusapi;
 
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.core.io.Resource;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -61,11 +59,11 @@ public class CoronavirusApiController {
             Map<String, String> row = it.next();
             String country = row.remove("Country/Region");
             String province = row.remove("Province/State");
-            // If province is an empty string, this row is about the entire country
-            province = (province.isEmpty()) ? "all" :  province;
+            // If `province` is an empty string, `row` describes the entire country
+            province = (province.isEmpty()) ? "all" : province;
             // Omit lat/lon
-            String lat = row.remove("Lat");
-            String lon = row.remove("Long");
+            row.remove("Lat");
+            row.remove("Long");
 
             out.putIfAbsent(country, new HashMap<>());
             out.get(country).putIfAbsent(province, new HashMap<>());
@@ -81,11 +79,9 @@ public class CoronavirusApiController {
 
     private static Iterator<Map<String, String>> readCsvResource(String path) {
         try {
-            Resource resource = new ClassPathResource(path);
-            File f = resource.getFile();
-
             ObjectMapper mapper = new CsvMapper();
             CsvSchema schema = CsvSchema.emptySchema().withHeader();
+            File f = new ClassPathResource(path).getFile();
 
             return mapper.readerFor(Map.class)
                     .with(schema)
