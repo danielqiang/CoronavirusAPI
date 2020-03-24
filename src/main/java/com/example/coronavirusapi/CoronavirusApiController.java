@@ -10,10 +10,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
 
 @RestController
 public class CoronavirusApiController {
@@ -46,7 +45,6 @@ public class CoronavirusApiController {
                 CaseType.RECOVERED
         );
     }
-
 
     private static void processCsvResource(
             Map<String, Map<String, Map<String, Map<String, String>>>> out,
@@ -92,13 +90,58 @@ public class CoronavirusApiController {
     }
 
     @GetMapping("/api/all")
-    public Map<String, Map<String, Map<String, Map<String, String>>>> all(
-            @RequestParam(value = "date", defaultValue = "all") String date,
-            @RequestParam(value = "state", defaultValue = "all") String state,
-            @RequestParam(value = "country", defaultValue = "all") String country) {
-        return data;
-    }
+    public Map<String, Map<String, Map<String, Map<String, String>>>>
+    all(@RequestParam(value = "date", defaultValue = "all") String queryDate,
+        @RequestParam(value = "country", defaultValue = "all") String queryCountry,
+        @RequestParam(value = "state", defaultValue = "all") String queryState) throws ParseException {
 
+        // queryDate = adjustDateFormat(queryDate);
+
+        Map<String, Map<String, Map<String, Map<String, String>>>> result = new HashMap<>();
+
+        if (data.containsKey(queryCountry)) {
+            if (data.get(queryCountry).containsKey(queryState)) {
+                addEntries(queryCountry, queryState, queryDate, result);
+            } else if (queryState.equals("all")) {
+                for (String state : data.get(queryCountry).keySet()) {
+                    addEntries(queryCountry, state, queryDate, result);
+                }
+            }
+        } else if (queryCountry.equals("all")){
+            for (String country : data.keySet()) {
+                for (String state : data.get(country).keySet()) {
+                    addEntries(country, state, queryDate, result);
+                }
+            }
+        }
+        return result;
+    }
+    /*
+    // accepts a date in MMDDYYYY format and returns it in M/DD/YY format
+    private String adjustDateFormat(String date) throws ParseException {
+        SimpleDateFormat formatter = new SimpleDateFormat("MMDDYYYY");
+        Date newDate = formatter.parse(date);
+
+        formatter =  new SimpleDateFormat("M/DD/YY");
+        return formatter.format(newDate);
+    } */
+
+    private void addEntries(String country, String state, String queryDate,
+                            Map<String, Map<String, Map<String, Map<String, String>>>> result)  {
+        if (data.get(country).get(state).keySet().contains(queryDate)) {
+            Map<String, String> dateMap = data.get(country).get(state).get(queryDate);
+            result.putIfAbsent(country, new HashMap<>());
+            result.get(country).putIfAbsent(state, new HashMap<>());
+            result.get(country).get(state).put(queryDate, dateMap);
+        } else if (queryDate.equals("all")) {
+            for (String date : data.get(country).get(state).keySet()) {
+                Map<String, String> dateMap = data.get(country).get(state).get(date);
+                result.putIfAbsent(country, new HashMap<>());
+                result.get(country).putIfAbsent(state, new HashMap<>());
+                result.get(country).get(state).put(date, dateMap);
+            }
+        }
+    }
     @GetMapping("/api/confirmed")
     public String confirmed(
             @RequestParam(value = "date") String date,
