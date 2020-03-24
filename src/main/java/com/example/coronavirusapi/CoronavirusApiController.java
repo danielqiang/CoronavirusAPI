@@ -56,6 +56,7 @@ public class CoronavirusApiController {
             CaseType caseType) {
         Iterator<Map<String, String>> it = readCsvResource(path);
         String caseName = caseType.name().toLowerCase();
+
         while (it.hasNext()) {
             Map<String, String> row = it.next();
             String country = row.remove("Country/Region");
@@ -96,8 +97,9 @@ public class CoronavirusApiController {
 
     @GetMapping("/api/all")
     public Map<String, Map<String, Map<String, Map<String, String>>>> all(
-            @RequestParam(value = "date", defaultValue = "") String date,
-            @RequestParam(value = "location", defaultValue = "") String location) {
+            @RequestParam(value = "date", defaultValue = "all") String date,
+            @RequestParam(value = "state", defaultValue = "all") String state,
+            @RequestParam(value = "country", defaultValue = "all") String country) {
         return data;
     }
 
