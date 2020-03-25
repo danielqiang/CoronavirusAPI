@@ -17,7 +17,10 @@ import java.util.stream.Collectors;
 
 @RestController
 public class CoronavirusApiController {
-    private final Map<String, Map<String, Map<String, Map<String, String>>>> data;
+    // TODO: Note to Anjali. I changed the map signature so that
+    //  the number of cases for each case type (confirmed, deaths, recovered)
+    //  is represented as an integer.
+    private final Map<String, Map<String, Map<String, Map<String, Integer>>>> data;
 
     /**
      * An enum for specifying if a coronavirus case
@@ -48,7 +51,7 @@ public class CoronavirusApiController {
     }
 
     private static void processCsvResource(
-            Map<String, Map<String, Map<String, Map<String, String>>>> out,
+            Map<String, Map<String, Map<String, Map<String, Integer>>>> out,
             String path,
             CaseType caseType) {
         Iterator<Map<String, String>> it = readCsvResource(path);
@@ -69,7 +72,7 @@ public class CoronavirusApiController {
 
             // Only date entries remain at this point
             for (String date : row.keySet()) {
-                String cases = row.get(date);
+                int cases = Integer.parseInt(row.get(date));
                 out.get(country).get(province).putIfAbsent(date, new HashMap<>());
                 out.get(country).get(province).get(date).put(caseName, cases);
             }
@@ -105,32 +108,70 @@ public class CoronavirusApiController {
     }
 
     /**
-     * Helper method to filter internal `data` map via streams.
+     * Helper method to query internal `data` map via streams.
      *
      * @param caseType if null, matches all case types. Otherwise,
      *                 matches the provided case type.
      */
-    private Map<String, Map<String, Map<String, Map<String, String>>>>
-    filter(String date, String country, String state, CaseType caseType) {
+    private Map<String, Map<String, Map<String, Map<String, Integer>>>>
+    query(String date, String country, String state, CaseType caseType) {
         String formattedDate = (date.equals("all")) ? "all" : reformatDate(date);
         String caseName = (caseType == null) ? null : caseType.name().toLowerCase();
 
+        // `data` map layout:
+        //     {
+        //        country: {
+        //            state: {
+        //                date: {
+        //                    "confirmed": x,
+        //                    "deaths": y,
+        //                    "recovered": z
+        //                }, ...
+        //            }, ...
+        //        }, ...
+        //    }
+        //
+        // If `date` is "all", then all dates are matched.
+        // If `state` is "all", then all states are matched.
+        // If `country` is "all", then all countries are matched.
+        //
+        // TODO: Note to Anjali. This method looks hefty because it's basically trying
+        //  to use `data` as a database. When we start using an actual database, this
+        //  code will likely be deprecated since SQL does all of this for us
+        //  and much more.
         return data.entrySet().stream()
+                // Top level (keys are countries, values are {state: {...}} maps).
+                // Filter out all countries that aren't equal to `country`.
+                // Don't filter out any countries if `country` is "all".
                 .filter(e -> (e.getKey().equalsIgnoreCase(country)
                         || country.equals("all")))
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
                         e -> e.getValue().entrySet().stream()
+                                // Next level (keys are states, values are {date: {...}} maps).
+                                // Filter out all states that aren't equal to `state`.
+                                // Don't filter out any states if `state` is "all".
                                 .filter(e1 -> (e1.getKey().equalsIgnoreCase(state)
                                         || state.equals("all")))
                                 .collect(Collectors.toMap(
                                         Map.Entry::getKey,
                                         e1 -> e1.getValue().entrySet().stream()
+                                                // Next level (keys are dates, values are
+                                                // {confirmed: x, deaths: y, recovered: z}.
+                                                // Filter out all dates that aren't equal to `date`.
+                                                // Don't filter out any dates if `date` is "all".
                                                 .filter(e2 -> (e2.getKey().equals(formattedDate)
                                                         || formattedDate.equals("all")))
                                                 .collect(Collectors.toMap(
                                                         Map.Entry::getKey,
                                                         e2 -> e2.getValue().entrySet().stream()
+                                                                // Lowest level (keys are
+                                                                // "confirmed", "deaths",
+                                                                // "recovered", values are integers.
+                                                                // Filter out all case types that
+                                                                // aren't equal to `caseType`.
+                                                                // Don't filter out anything
+                                                                // if `caseType` is null.
                                                                 .filter(e3 -> e3.getKey().equals(caseName)
                                                                         || caseName == null)
                                                                 .collect(Collectors.toMap(
@@ -139,15 +180,13 @@ public class CoronavirusApiController {
                                                                         )
                                                                 )
                                                         )
-                                                ).entrySet().stream()
-                                                .filter(e2 -> (!e2.getValue().isEmpty()))
-                                                .collect(Collectors.toMap(
-                                                        Map.Entry::getKey,
-                                                        Map.Entry::getValue
-                                                        )
+
                                                 )
                                         )
                                 ).entrySet().stream()
+                                // Filter out state entries with empty data (state: {}).
+                                // This can happen if `date` is not found in `data`
+                                // and all countries/states are matched.
                                 .filter(e1 -> (!e1.getValue().isEmpty()))
                                 .collect(Collectors.toMap(
                                         Map.Entry::getKey,
@@ -155,7 +194,11 @@ public class CoronavirusApiController {
                                         )
                                 )
                         )
+
                 ).entrySet().stream()
+                // Filter out country entries with empty data (country: {}).
+                // This can happen if `state` is not found in `data`
+                // and all countries are matched.
                 .filter(e -> (!e.getValue().isEmpty()))
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
@@ -165,39 +208,39 @@ public class CoronavirusApiController {
     }
 
     @GetMapping("/api/all")
-    public Map<String, Map<String, Map<String, Map<String, String>>>> all(
+    public Map<String, Map<String, Map<String, Map<String, Integer>>>> all(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
             @RequestParam(value = "state", defaultValue = "all") String state
     ) {
-        return filter(date, country, state, null);
+        return query(date, country, state, null);
     }
 
 
     @GetMapping("/api/confirmed")
-    public Map<String, Map<String, Map<String, Map<String, String>>>> confirmed(
+    public Map<String, Map<String, Map<String, Map<String, Integer>>>> confirmed(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
             @RequestParam(value = "state", defaultValue = "all") String state
     ) {
-        return filter(date, country, state, CaseType.CONFIRMED);
+        return query(date, country, state, CaseType.CONFIRMED);
     }
 
     @GetMapping("/api/deaths")
-    public Map<String, Map<String, Map<String, Map<String, String>>>> deaths(
+    public Map<String, Map<String, Map<String, Map<String, Integer>>>> deaths(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
             @RequestParam(value = "state", defaultValue = "all") String state
     ) {
-        return filter(date, country, state, CaseType.DEATHS);
+        return query(date, country, state, CaseType.DEATHS);
     }
 
     @GetMapping("api/recovered")
-    public Map<String, Map<String, Map<String, Map<String, String>>>> recovered(
+    public Map<String, Map<String, Map<String, Map<String, Integer>>>> recovered(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
             @RequestParam(value = "state", defaultValue = "all") String state
     ) {
-        return filter(date, country, state, CaseType.RECOVERED);
+        return query(date, country, state, CaseType.RECOVERED);
     }
 }
