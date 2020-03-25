@@ -13,7 +13,7 @@
     <artifactId>coronavirus-api</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>coronavirus-api</name>
-    <description>Demo project for Spring Boot</description>
+    <description>Spring Boot API endpoint for live data/statistics regarding COVID-19</description>
 
     <properties>
         <java.version>11</java.version>
