@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 public class CoronavirusApiController {
@@ -89,40 +90,13 @@ public class CoronavirusApiController {
         }
     }
 
-    @GetMapping("/api/all")
-    public Map<String, Map<String, Map<String, Map<String, String>>>>
-    all(@RequestParam(value = "date", defaultValue = "all") String queryDate,
-        @RequestParam(value = "country", defaultValue = "all") String queryCountry,
-        @RequestParam(value = "state", defaultValue = "all") String queryState) {
-
-        if (!queryDate.equals("all"))
-            queryDate = adjustDateFormat(queryDate);
-
-        Map<String, Map<String, Map<String, Map<String, String>>>> result = new HashMap<>();
-
-        if (data.containsKey(queryCountry)) {
-            if (data.get(queryCountry).containsKey(queryState)) {
-                addEntries(queryCountry, queryState, queryDate, result);
-            } else if (queryState.equals("all")) {
-                for (String state : data.get(queryCountry).keySet()) {
-                    addEntries(queryCountry, state, queryDate, result);
-                }
-            }
-        } else if (queryCountry.equals("all")){
-            for (String country : data.keySet()) {
-                for (String state : data.get(country).keySet()) {
-                    addEntries(country, state, queryDate, result);
-                }
-            }
-        }
-        return result;
-    }
-    // accepts a date in MMDDYYYY format and returns it in M/DD/YY format.
-    // If the date is invalid, returns an empty string.
-    private String adjustDateFormat(String date) {
+    /**
+     * Helper method to reformat a date from `MMddyyyy` format to `M/d/YY` format.
+     * If the date is invalid, returns an empty string.
+     */
+    private String reformatDate(String date) {
         try {
-            SimpleDateFormat formatter = new SimpleDateFormat("MMddyyyy");
-            Date newDate = formatter.parse(date);
+            Date newDate = new SimpleDateFormat("MMddyyyy").parse(date);
 
             return new SimpleDateFormat("M/d/yy").format(newDate);
         } catch (ParseException e) {
@@ -130,42 +104,100 @@ public class CoronavirusApiController {
         }
     }
 
-    private void addEntries(String country, String state, String queryDate,
-                            Map<String, Map<String, Map<String, Map<String, String>>>> result)  {
-        if (data.get(country).get(state).keySet().contains(queryDate)) {
-            Map<String, String> dateMap = data.get(country).get(state).get(queryDate);
-            result.putIfAbsent(country, new HashMap<>());
-            result.get(country).putIfAbsent(state, new HashMap<>());
-            result.get(country).get(state).put(queryDate, dateMap);
-        } else if (queryDate.equals("all")) {
-            for (String date : data.get(country).get(state).keySet()) {
-                Map<String, String> dateMap = data.get(country).get(state).get(date);
-                result.putIfAbsent(country, new HashMap<>());
-                result.get(country).putIfAbsent(state, new HashMap<>());
-                result.get(country).get(state).put(date, dateMap);
-            }
-        }
+    /**
+     * Helper method to filter internal `data` map via streams.
+     *
+     * @param caseType if null, matches all case types. Otherwise,
+     *                 matches the provided case type.
+     */
+    private Map<String, Map<String, Map<String, Map<String, String>>>>
+    filter(String date, String country, String state, CaseType caseType) {
+        String formattedDate = (date.equals("all")) ? "all" : reformatDate(date);
+        String caseName = (caseType == null) ? null : caseType.name().toLowerCase();
+
+        return data.entrySet().stream()
+                .filter(e -> (e.getKey().equalsIgnoreCase(country)
+                        || country.equals("all")))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> e.getValue().entrySet().stream()
+                                .filter(e1 -> (e1.getKey().equalsIgnoreCase(state)
+                                        || state.equals("all")))
+                                .collect(Collectors.toMap(
+                                        Map.Entry::getKey,
+                                        e1 -> e1.getValue().entrySet().stream()
+                                                .filter(e2 -> (e2.getKey().equals(formattedDate)
+                                                        || formattedDate.equals("all")))
+                                                .collect(Collectors.toMap(
+                                                        Map.Entry::getKey,
+                                                        e2 -> e2.getValue().entrySet().stream()
+                                                                .filter(e3 -> e3.getKey().equals(caseName)
+                                                                        || caseName == null)
+                                                                .collect(Collectors.toMap(
+                                                                        Map.Entry::getKey,
+                                                                        Map.Entry::getValue
+                                                                        )
+                                                                )
+                                                        )
+                                                ).entrySet().stream()
+                                                .filter(e2 -> (!e2.getValue().isEmpty()))
+                                                .collect(Collectors.toMap(
+                                                        Map.Entry::getKey,
+                                                        Map.Entry::getValue
+                                                        )
+                                                )
+                                        )
+                                ).entrySet().stream()
+                                .filter(e1 -> (!e1.getValue().isEmpty()))
+                                .collect(Collectors.toMap(
+                                        Map.Entry::getKey,
+                                        Map.Entry::getValue
+                                        )
+                                )
+                        )
+                ).entrySet().stream()
+                .filter(e -> (!e.getValue().isEmpty()))
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue
+                        )
+                );
     }
+
+    @GetMapping("/api/all")
+    public Map<String, Map<String, Map<String, Map<String, String>>>> all(
+            @RequestParam(value = "date", defaultValue = "all") String date,
+            @RequestParam(value = "country", defaultValue = "all") String country,
+            @RequestParam(value = "state", defaultValue = "all") String state
+    ) {
+        return filter(date, country, state, null);
+    }
+
+
     @GetMapping("/api/confirmed")
-    public String confirmed(
-            @RequestParam(value = "date") String date,
-            @RequestParam(value = "location") String location) {
-        return null;
+    public Map<String, Map<String, Map<String, Map<String, String>>>> confirmed(
+            @RequestParam(value = "date", defaultValue = "all") String date,
+            @RequestParam(value = "country", defaultValue = "all") String country,
+            @RequestParam(value = "state", defaultValue = "all") String state
+    ) {
+        return filter(date, country, state, CaseType.CONFIRMED);
     }
 
     @GetMapping("/api/deaths")
-    public String deaths(
-            @RequestParam(value = "date") String date,
-            @RequestParam(value = "location") String location) {
-        return null;
+    public Map<String, Map<String, Map<String, Map<String, String>>>> deaths(
+            @RequestParam(value = "date", defaultValue = "all") String date,
+            @RequestParam(value = "country", defaultValue = "all") String country,
+            @RequestParam(value = "state", defaultValue = "all") String state
+    ) {
+        return filter(date, country, state, CaseType.DEATHS);
     }
 
     @GetMapping("api/recovered")
-    public String recovered(
-            @RequestParam(value = "date") String date,
-            @RequestParam(value = "location") String location) {
-        return null;
+    public Map<String, Map<String, Map<String, Map<String, String>>>> recovered(
+            @RequestParam(value = "date", defaultValue = "all") String date,
+            @RequestParam(value = "country", defaultValue = "all") String country,
+            @RequestParam(value = "state", defaultValue = "all") String state
+    ) {
+        return filter(date, country, state, CaseType.RECOVERED);
     }
-
-
 }
