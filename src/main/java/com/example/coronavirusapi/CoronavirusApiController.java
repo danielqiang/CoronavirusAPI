@@ -93,9 +93,10 @@ public class CoronavirusApiController {
     public Map<String, Map<String, Map<String, Map<String, String>>>>
     all(@RequestParam(value = "date", defaultValue = "all") String queryDate,
         @RequestParam(value = "country", defaultValue = "all") String queryCountry,
-        @RequestParam(value = "state", defaultValue = "all") String queryState) throws ParseException {
+        @RequestParam(value = "state", defaultValue = "all") String queryState) {
 
-        // queryDate = adjustDateFormat(queryDate);
+        if (!queryDate.equals("all"))
+            queryDate = adjustDateFormat(queryDate);
 
         Map<String, Map<String, Map<String, Map<String, String>>>> result = new HashMap<>();
 
@@ -116,15 +117,18 @@ public class CoronavirusApiController {
         }
         return result;
     }
-    /*
-    // accepts a date in MMDDYYYY format and returns it in M/DD/YY format
-    private String adjustDateFormat(String date) throws ParseException {
-        SimpleDateFormat formatter = new SimpleDateFormat("MMDDYYYY");
-        Date newDate = formatter.parse(date);
+    // accepts a date in MMDDYYYY format and returns it in M/DD/YY format.
+    // If the date is invalid, returns an empty string.
+    private String adjustDateFormat(String date) {
+        try {
+            SimpleDateFormat formatter = new SimpleDateFormat("MMddyyyy");
+            Date newDate = formatter.parse(date);
 
-        formatter =  new SimpleDateFormat("M/DD/YY");
-        return formatter.format(newDate);
-    } */
+            return new SimpleDateFormat("M/d/yy").format(newDate);
+        } catch (ParseException e) {
+            return "";
+        }
+    }
 
     private void addEntries(String country, String state, String queryDate,
                             Map<String, Map<String, Map<String, Map<String, String>>>> result)  {
