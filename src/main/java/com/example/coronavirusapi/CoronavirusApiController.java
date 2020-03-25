@@ -12,8 +12,8 @@ import java.io.File;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.*;
 import java.util.stream.Collectors;
+import java.util.*;
 
 @RestController
 public class CoronavirusApiController {
@@ -97,11 +97,12 @@ public class CoronavirusApiController {
      * Helper method to reformat a date from `MMddyyyy` format to `M/d/YY` format.
      * If the date is invalid, returns an empty string.
      */
-    private String reformatDate(String date) {
+    private static String reformatDate(String date) {
         try {
-            Date newDate = new SimpleDateFormat("MMddyyyy").parse(date);
+            SimpleDateFormat oldPattern = new SimpleDateFormat("MMddyyyy");
+            SimpleDateFormat newPattern = new SimpleDateFormat("M/d/yy");
 
-            return new SimpleDateFormat("M/d/yy").format(newDate);
+            return newPattern.format(oldPattern.parse(date));
         } catch (ParseException e) {
             return "";
         }
