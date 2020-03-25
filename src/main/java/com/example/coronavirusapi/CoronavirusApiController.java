@@ -23,11 +23,16 @@ public class CoronavirusApiController {
     private final Map<String, Map<String, Map<String, Map<String, Integer>>>> data;
 
     /**
-     * An enum for specifying if a coronavirus case
-     * is a confirmed case, a death or a recovery.
+     * Enum for classifying a coronavirus case
+     * as a confirmed case, a death or a recovery.
      */
     private enum CaseType {CONFIRMED, DEATHS, RECOVERED}
 
+    /**
+     * Zero-argument constructor for this API controller.
+     * <p>
+     * Pre-processes CSV data.
+     */
     public CoronavirusApiController() {
         data = new HashMap<>();
         processCsvResource(
@@ -60,21 +65,21 @@ public class CoronavirusApiController {
         while (it.hasNext()) {
             Map<String, String> row = it.next();
             String country = row.remove("Country/Region");
-            String province = row.remove("Province/State");
-            // If `province` is an empty string, `row` describes the entire country
-            province = (province.isEmpty()) ? "all" : province;
+            String state = row.remove("Province/State");
+            // If `state` is an empty string, `row` describes the entire country
+            state = (state.isEmpty()) ? "all" : state;
             // Omit lat/lon
             row.remove("Lat");
             row.remove("Long");
 
             out.putIfAbsent(country, new HashMap<>());
-            out.get(country).putIfAbsent(province, new HashMap<>());
+            out.get(country).putIfAbsent(state, new HashMap<>());
 
             // Only date entries remain at this point
             for (String date : row.keySet()) {
                 int cases = Integer.parseInt(row.get(date));
-                out.get(country).get(province).putIfAbsent(date, new HashMap<>());
-                out.get(country).get(province).get(date).put(caseName, cases);
+                out.get(country).get(state).putIfAbsent(date, new HashMap<>());
+                out.get(country).get(state).get(date).put(caseName, cases);
             }
         }
     }
@@ -94,7 +99,8 @@ public class CoronavirusApiController {
     }
 
     /**
-     * Helper method to reformat a date from `MMddyyyy` format to `M/d/YY` format.
+     * Helper method to reformat a {@code String} date from
+     * `MMddyyyy` format to `M/d/YY` format.
      * If the date is invalid, returns an empty string.
      */
     private static String reformatDate(String date) {
@@ -109,10 +115,12 @@ public class CoronavirusApiController {
     }
 
     /**
-     * Helper method to query internal `data` map via streams.
+     * Helper method to query internal {@code data} map via streams.
      *
-     * @param caseType if null, matches all case types. Otherwise,
-     *                 matches the provided case type.
+     * @param caseType {@code CaseType} enum describing the case type
+     *                 (confirmed, deaths, recovered) to match.
+     *                 If null, matches all case types.
+     * @return {@code Map} containing all entries matching the query.
      */
     private Map<String, Map<String, Map<String, Map<String, Integer>>>>
     query(String date, String country, String state, CaseType caseType) {
@@ -168,7 +176,8 @@ public class CoronavirusApiController {
                                                         e2 -> e2.getValue().entrySet().stream()
                                                                 // Lowest level (keys are
                                                                 // "confirmed", "deaths",
-                                                                // "recovered", values are integers.
+                                                                // "recovered", values are
+                                                                // integers).
                                                                 // Filter out all case types that
                                                                 // aren't equal to `caseType`.
                                                                 // Don't filter out anything
@@ -212,8 +221,7 @@ public class CoronavirusApiController {
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> all(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state
-    ) {
+            @RequestParam(value = "state", defaultValue = "all") String state) {
         return query(date, country, state, null);
     }
 
@@ -222,8 +230,7 @@ public class CoronavirusApiController {
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> confirmed(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state
-    ) {
+            @RequestParam(value = "state", defaultValue = "all") String state) {
         return query(date, country, state, CaseType.CONFIRMED);
     }
 
@@ -231,8 +238,7 @@ public class CoronavirusApiController {
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> deaths(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state
-    ) {
+            @RequestParam(value = "state", defaultValue = "all") String state) {
         return query(date, country, state, CaseType.DEATHS);
     }
 
@@ -240,8 +246,7 @@ public class CoronavirusApiController {
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> recovered(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state
-    ) {
+            @RequestParam(value = "state", defaultValue = "all") String state) {
         return query(date, country, state, CaseType.RECOVERED);
     }
 }
