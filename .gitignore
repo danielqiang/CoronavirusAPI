@@ -31,4 +31,4 @@ build/
 .vscode/
 
 ### Testing ###
-/src/main/java/Test.java
+**/[Tt]est.*
