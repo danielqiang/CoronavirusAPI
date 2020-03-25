@@ -17,37 +17,30 @@ import java.util.*;
 
 @RestController
 public class CoronavirusApiController {
-    // TODO: Note to Anjali. I changed the map signature so that
-    //  the number of cases for each case type (confirmed, deaths, recovered)
-    //  is represented as an integer.
     private final Map<String, Map<String, Map<String, Map<String, Integer>>>> data;
 
     /**
-     * Enum for classifying a coronavirus case
-     * as a confirmed case, a death or a recovery.
+     * Enum for classifying a coronavirus case as a
+     * confirmed case, a death or a recovery.
      */
     private enum CaseType {CONFIRMED, DEATHS, RECOVERED}
 
-    /**
-     * Zero-argument constructor for this API controller.
-     * <p>
-     * Pre-processes CSV data.
-     */
     public CoronavirusApiController() {
+        // Pre-process CSV data
         data = new HashMap<>();
-        processCsvResource(
+        loadCsvResource(
                 data,
                 "csse_covid_19_data/csse_covid_19_time_series/" +
                         "time_series_19-covid-Confirmed.csv",
                 CaseType.CONFIRMED
         );
-        processCsvResource(
+        loadCsvResource(
                 data,
                 "csse_covid_19_data/csse_covid_19_time_series/" +
                         "time_series_19-covid-Deaths.csv",
                 CaseType.DEATHS
         );
-        processCsvResource(
+        loadCsvResource(
                 data,
                 "csse_covid_19_data/csse_covid_19_time_series/" +
                         "time_series_19-covid-Recovered.csv",
@@ -55,7 +48,7 @@ public class CoronavirusApiController {
         );
     }
 
-    private static void processCsvResource(
+    private static void loadCsvResource(
             Map<String, Map<String, Map<String, Map<String, Integer>>>> out,
             String path,
             CaseType caseType) {
@@ -100,7 +93,7 @@ public class CoronavirusApiController {
 
     /**
      * Helper method to reformat a {@code String} date from
-     * `MMddyyyy` format to `M/d/YY` format.
+     * `MMddyyyy` format to `M/d/yy` format.
      * If the date is invalid, returns an empty string.
      */
     private static String reformatDate(String date) {
@@ -115,7 +108,7 @@ public class CoronavirusApiController {
     }
 
     /**
-     * Helper method to query internal {@code data} map via streams.
+     * Helper method to query internal {@code data} map.
      *
      * @param caseType {@code CaseType} enum describing the case type
      *                 (confirmed, deaths, recovered) to match.
@@ -127,27 +120,10 @@ public class CoronavirusApiController {
         String formattedDate = (date.equals("all")) ? "all" : reformatDate(date);
         String caseName = (caseType == null) ? null : caseType.name().toLowerCase();
 
-        // `data` map layout:
-        //     {
-        //        country: {
-        //            state: {
-        //                date: {
-        //                    "confirmed": x,
-        //                    "deaths": y,
-        //                    "recovered": z
-        //                }, ...
-        //            }, ...
-        //        }, ...
-        //    }
-        //
-        // If `date` is "all", then all dates are matched.
-        // If `state` is "all", then all states are matched.
-        // If `country` is "all", then all countries are matched.
-        //
-        // TODO: Note to Anjali. This method looks hefty because it's basically trying
-        //  to use `data` as a database. When we start using an actual database, this
-        //  code will likely be deprecated since SQL does all of this for us
-        //  and much more.
+        // This method looks hefty because it's basically trying
+        // to use `data` as a database. When we start using an actual database, this
+        // code will likely be deprecated since SQL does all of this for us
+        // and much more.
         return data.entrySet().stream()
                 // Top level (keys are countries, values are {state: {...}} maps).
                 // Filter out all countries that aren't equal to `country`.
@@ -207,7 +183,7 @@ public class CoronavirusApiController {
 
                 ).entrySet().stream()
                 // Filter out country entries with empty data (country: {}).
-                // This can happen if `state` is not found in `data`
+                // This can happen if `state` or `date` is not found in `data`
                 // and all countries are matched.
                 .filter(e -> (!e.getValue().isEmpty()))
                 .collect(Collectors.toMap(
@@ -216,6 +192,14 @@ public class CoronavirusApiController {
                         )
                 );
     }
+
+    // TODO: Issues to fix:
+    //  - Some (all?) countries with explicitly named provinces/states do not have
+    //    an 'all' key.
+    //  - Normalize returned date to MMddyyyy so sorting them lexicographically
+    //    works
+    //  - Design question: how can we support users only wanting sums for each country
+    //    (only display the 'all' key)?
 
     @GetMapping("/api/all")
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> all(
