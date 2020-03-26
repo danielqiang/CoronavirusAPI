@@ -112,7 +112,7 @@ public class CoronavirusApiController {
      */
     private Map<String, Map<String, Map<String, Map<String, Integer>>>>
     query(Date date, String country, String state, CaseType caseType) {
-        String formattedDate = (date.equals("all")) ? "all" : reformatDate(date);
+        String formattedDate = (date == null) ? null : reformatDate(date);
         String caseName = (caseType == null) ? null : caseType.name().toLowerCase();
 
         // This method looks hefty because it's basically trying
@@ -141,7 +141,7 @@ public class CoronavirusApiController {
                                                 // Filter out all dates that aren't equal to `date`.
                                                 // Don't filter out any dates if `date` is "all".
                                                 .filter(e2 -> (e2.getKey().equals(formattedDate)
-                                                        || formattedDate.equals("all")))
+                                                        || formattedDate == null))
                                                 .collect(Collectors.toMap(
                                                         Map.Entry::getKey,
                                                         e2 -> e2.getValue().entrySet().stream()
@@ -246,7 +246,8 @@ public class CoronavirusApiController {
      *      indicates that the given date is not
      *      parse-able into a Date object
      *
-     * Returns Date object representing the given date
+     * Returns Date object representing the given date, or null if
+     *      date parameter was "all"
      */
     private Date checkInputValid(String date, String country, String state)
             throws InvalidDateFormatException {
@@ -254,12 +255,16 @@ public class CoronavirusApiController {
             throw new InvalidStateException();
         }
 
-        String datePattern = "MMddyyyy";
-        try {
-            SimpleDateFormat format = new SimpleDateFormat(datePattern);
-            return format.parse(date);
-        } catch (ParseException e) {
-            throw new InvalidDateFormatException(datePattern, e);
+        if (date.equals("all")) {
+            return null;
+        } else {
+            String datePattern = "MMddyyyy";
+            try {
+                SimpleDateFormat format = new SimpleDateFormat(datePattern);
+                return format.parse(date);
+            } catch (ParseException e) {
+                throw new InvalidDateFormatException(datePattern, e);
+            }
         }
     }
 }
