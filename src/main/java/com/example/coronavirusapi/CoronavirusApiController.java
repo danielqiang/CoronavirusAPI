@@ -1,5 +1,7 @@
 package com.example.coronavirusapi;
 
+import com.example.coronavirusapi.custom_exceptions.InvalidDateFormatException;
+import com.example.coronavirusapi.custom_exceptions.InvalidStateException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvMapper;
 import com.fasterxml.jackson.dataformat.csv.CsvSchema;
@@ -92,19 +94,12 @@ public class CoronavirusApiController {
     }
 
     /**
-     * Helper method to reformat a {@code String} date from
-     * `MMddyyyy` format to `M/d/yy` format.
-     * If the date is invalid, returns an empty string.
+     * Helper method to reformat a {@code Date} date from
+     * to String`M/d/yy` format.
      */
-    private static String reformatDate(String date) {
-        try {
-            SimpleDateFormat oldPattern = new SimpleDateFormat("MMddyyyy");
-            SimpleDateFormat newPattern = new SimpleDateFormat("M/d/yy");
-
-            return newPattern.format(oldPattern.parse(date));
-        } catch (ParseException e) {
-            return "";
-        }
+    private static String reformatDate(Date date) {
+        SimpleDateFormat newPattern = new SimpleDateFormat("M/d/yy");
+        return newPattern.format(date);
     }
 
     /**
@@ -116,7 +111,7 @@ public class CoronavirusApiController {
      * @return {@code Map} containing all entries matching the query.
      */
     private Map<String, Map<String, Map<String, Map<String, Integer>>>>
-    query(String date, String country, String state, CaseType caseType) {
+    query(Date date, String country, String state, CaseType caseType) {
         String formattedDate = (date.equals("all")) ? "all" : reformatDate(date);
         String caseName = (caseType == null) ? null : caseType.name().toLowerCase();
 
@@ -205,8 +200,10 @@ public class CoronavirusApiController {
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> all(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state) {
-        return query(date, country, state, null);
+            @RequestParam(value = "state", defaultValue = "all") String state)
+            throws InvalidDateFormatException {
+        Date processedDate = checkInputValid(date, country, state);
+        return query(processedDate, country, state, null);
     }
 
 
@@ -214,23 +211,55 @@ public class CoronavirusApiController {
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> confirmed(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state) {
-        return query(date, country, state, CaseType.CONFIRMED);
+            @RequestParam(value = "state", defaultValue = "all") String state)
+            throws InvalidDateFormatException {
+        Date processedDate = checkInputValid(date, country, state);
+        return query(processedDate, country, state, CaseType.CONFIRMED);
     }
 
     @GetMapping("/api/deaths")
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> deaths(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state) {
-        return query(date, country, state, CaseType.DEATHS);
+            @RequestParam(value = "state", defaultValue = "all") String state)
+            throws InvalidDateFormatException {
+        Date processedDate = checkInputValid(date, country, state);
+        return query(processedDate, country, state, CaseType.DEATHS);
     }
 
     @GetMapping("api/recovered")
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> recovered(
             @RequestParam(value = "date", defaultValue = "all") String date,
             @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state) {
-        return query(date, country, state, CaseType.RECOVERED);
+            @RequestParam(value = "state", defaultValue = "all") String state)
+            throws InvalidDateFormatException {
+        Date processedDate = checkInputValid(date, country, state);
+        return query(processedDate, country, state, CaseType.RECOVERED);
+    }
+
+    /**
+     * Helper method to check if provided inputs are valid
+     * @throws InvalidStateException
+     *      indicates that a state request parameter was provided,
+     *      but country request parameter was "all"
+     * @throws InvalidDateFormatException
+     *      indicates that the given date is not
+     *      parse-able into a Date object
+     *
+     * Returns Date object representing the given date
+     */
+    private Date checkInputValid(String date, String country, String state)
+            throws InvalidDateFormatException {
+        if (country.equals("all") && !state.equals("all")) {
+            throw new InvalidStateException();
+        }
+
+        String datePattern = "MMddyyyy";
+        try {
+            SimpleDateFormat format = new SimpleDateFormat(datePattern);
+            return format.parse(date);
+        } catch (ParseException e) {
+            throw new InvalidDateFormatException(datePattern, e);
+        }
     }
 }
