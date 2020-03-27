@@ -21,6 +21,12 @@ import java.util.*;
 public class CoronavirusApiController {
     private final Map<String, Map<String, Map<String, Map<String, Integer>>>> data;
 
+    // returns totals for the query parameter it is specified for
+    private static final String SUM_QUERY = "total";
+
+    // returns all data for the query parameter it is specified for
+    private static final String DEFAULT_QUERY = "";
+
     /**
      * Enum for classifying a coronavirus case as a
      * confirmed case, a death or a recovery.
@@ -62,7 +68,7 @@ public class CoronavirusApiController {
             String country = row.remove("Country/Region");
             String state = row.remove("Province/State");
             // If `state` is an empty string, `row` describes the entire country
-            state = (state.isEmpty()) ? "all" : state;
+            state = (state.isEmpty()) ? SUM_QUERY : state;
             // Omit lat/lon
             row.remove("Lat");
             row.remove("Long");
@@ -122,24 +128,24 @@ public class CoronavirusApiController {
         return data.entrySet().stream()
                 // Top level (keys are countries, values are {state: {...}} maps).
                 // Filter out all countries that aren't equal to `country`.
-                // Don't filter out any countries if `country` is "all".
+                // Don't filter out any countries if `country` is the default query.
                 .filter(e -> (e.getKey().equalsIgnoreCase(country)
-                        || country.equals("all")))
+                        || country.equalsIgnoreCase(DEFAULT_QUERY)))
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
                         e -> e.getValue().entrySet().stream()
                                 // Next level (keys are states, values are {date: {...}} maps).
                                 // Filter out all states that aren't equal to `state`.
-                                // Don't filter out any states if `state` is "all".
+                                // Don't filter out any states if `state` is the default query.
                                 .filter(e1 -> (e1.getKey().equalsIgnoreCase(state)
-                                        || state.equals("all")))
+                                        || state.equalsIgnoreCase(DEFAULT_QUERY)))
                                 .collect(Collectors.toMap(
                                         Map.Entry::getKey,
                                         e1 -> e1.getValue().entrySet().stream()
                                                 // Next level (keys are dates, values are
                                                 // {confirmed: x, deaths: y, recovered: z}.
                                                 // Filter out all dates that aren't equal to `date`.
-                                                // Don't filter out any dates if `date` is "all".
+                                                // Don't filter out any dates if `date` is the default query.
                                                 .filter(e2 -> (e2.getKey().equals(formattedDate)
                                                         || formattedDate == null))
                                                 .collect(Collectors.toMap(
@@ -198,9 +204,9 @@ public class CoronavirusApiController {
 
     @GetMapping("/api/all")
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> all(
-            @RequestParam(value = "date", defaultValue = "all") String date,
-            @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state)
+            @RequestParam(value = "date", defaultValue = DEFAULT_QUERY) String date,
+            @RequestParam(value = "country", defaultValue = DEFAULT_QUERY) String country,
+            @RequestParam(value = "state", defaultValue = DEFAULT_QUERY) String state)
             throws InvalidDateFormatException {
         Date processedDate = checkInputValid(date, country, state);
         return query(processedDate, country, state, null);
@@ -209,9 +215,9 @@ public class CoronavirusApiController {
 
     @GetMapping("/api/confirmed")
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> confirmed(
-            @RequestParam(value = "date", defaultValue = "all") String date,
-            @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state)
+            @RequestParam(value = "date", defaultValue = DEFAULT_QUERY) String date,
+            @RequestParam(value = "country", defaultValue = DEFAULT_QUERY) String country,
+            @RequestParam(value = "state", defaultValue = DEFAULT_QUERY) String state)
             throws InvalidDateFormatException {
         Date processedDate = checkInputValid(date, country, state);
         return query(processedDate, country, state, CaseType.CONFIRMED);
@@ -219,9 +225,9 @@ public class CoronavirusApiController {
 
     @GetMapping("/api/deaths")
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> deaths(
-            @RequestParam(value = "date", defaultValue = "all") String date,
-            @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state)
+            @RequestParam(value = "date", defaultValue = DEFAULT_QUERY) String date,
+            @RequestParam(value = "country", defaultValue = DEFAULT_QUERY) String country,
+            @RequestParam(value = "state", defaultValue = DEFAULT_QUERY) String state)
             throws InvalidDateFormatException {
         Date processedDate = checkInputValid(date, country, state);
         return query(processedDate, country, state, CaseType.DEATHS);
@@ -229,9 +235,9 @@ public class CoronavirusApiController {
 
     @GetMapping("api/recovered")
     public Map<String, Map<String, Map<String, Map<String, Integer>>>> recovered(
-            @RequestParam(value = "date", defaultValue = "all") String date,
-            @RequestParam(value = "country", defaultValue = "all") String country,
-            @RequestParam(value = "state", defaultValue = "all") String state)
+            @RequestParam(value = "date", defaultValue = DEFAULT_QUERY) String date,
+            @RequestParam(value = "country", defaultValue = DEFAULT_QUERY) String country,
+            @RequestParam(value = "state", defaultValue = DEFAULT_QUERY) String state)
             throws InvalidDateFormatException {
         Date processedDate = checkInputValid(date, country, state);
         return query(processedDate, country, state, CaseType.RECOVERED);
@@ -240,22 +246,26 @@ public class CoronavirusApiController {
     /**
      * Helper method to check if provided inputs are valid
      * @throws InvalidStateException
-     *      indicates that a state request parameter was provided,
-     *      but country request parameter was "all"
+     *      indicates that a specific state request parameter was provided,
+     *      but country request parameter was "total"
      * @throws InvalidDateFormatException
-     *      indicates that the given date is not
-     *      parse-able into a Date object
+     *      indicates that the given date is not parse-able
+     *      into a Date object, or one of the acceptable date queries
+     *      (i.e. "total" or "")
      *
      * Returns Date object representing the given date, or null if
-     *      date parameter was "all"
+     *      date parameter was "total" or ""
      */
     private Date checkInputValid(String date, String country, String state)
             throws InvalidDateFormatException {
-        if (country.equals("all") && !state.equals("all")) {
+        if (country.equalsIgnoreCase(SUM_QUERY) &&
+                !(state.equalsIgnoreCase(SUM_QUERY)
+                        || state.equalsIgnoreCase(DEFAULT_QUERY))) {
             throw new InvalidStateException();
         }
 
-        if (date.equals("all")) {
+        if (date.equalsIgnoreCase(DEFAULT_QUERY)
+                || date.equalsIgnoreCase(SUM_QUERY)) {
             return null;
         } else {
             String datePattern = "MMddyyyy";
